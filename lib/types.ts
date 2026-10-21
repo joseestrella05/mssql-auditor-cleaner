@@ -120,12 +120,22 @@ export interface ForeignKeyRelationship {
   refColumn: string;
 }
 
+export interface SnapshotMetadata {
+  databaseName: string;
+  serverInstance: string;
+  createdAt: string;
+  uptimeStartTime: string;
+  totalTablesCount: number;
+}
+
 export interface AuditSnapshot {
   version: string;
-  snapshotDate: string;
-  databaseName: string;
-  serverName: string;
-  sqlServerStartTime: string;
+  metadata?: SnapshotMetadata;
+  // Campos heredados / fallback para compatibilidad con snapshots previos
+  snapshotDate?: string;
+  databaseName?: string;
+  serverName?: string;
+  sqlServerStartTime?: string;
   tables: Array<{
     fullName: string;
     schemaName: string;

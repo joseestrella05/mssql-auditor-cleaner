@@ -247,11 +247,20 @@ export function DataTable({ summary, connectionPayload }: DataTableProps) {
     downloadFile(content, filename, 'text/csv;charset=utf-8;');
   };
 
-  // Guardar Snapshot de Auditoría (.json descargable)
+  // Guardar Snapshot de Auditoría (.json descargable con metadatos estrictos)
   const handleSaveSnapshot = () => {
+    const nowIso = new Date().toISOString();
     const snapshot: AuditSnapshot = {
       version: '1.0',
-      snapshotDate: new Date().toISOString(),
+      metadata: {
+        databaseName: summary.databaseName,
+        serverInstance: summary.serverInfo.serverName,
+        createdAt: nowIso,
+        uptimeStartTime: summary.sqlServerStartTime,
+        totalTablesCount: classifiedTables.length,
+      },
+      // Compatibilidad retroactiva
+      snapshotDate: nowIso,
       databaseName: summary.databaseName,
       serverName: summary.serverInfo.serverName,
       sqlServerStartTime: summary.sqlServerStartTime,
@@ -267,7 +276,7 @@ export function DataTable({ summary, connectionPayload }: DataTableProps) {
         classification: t.classification,
       })),
     };
-    const filename = `Snapshot_${summary.databaseName}_${new Date().toISOString().slice(0, 10)}.json`;
+    const filename = `Snapshot_${summary.databaseName}_${nowIso.slice(0, 10)}.json`;
     downloadFile(JSON.stringify(snapshot, null, 2), filename, 'application/json;charset=utf-8;');
   };
 

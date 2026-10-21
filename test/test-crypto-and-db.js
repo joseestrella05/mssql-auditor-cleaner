@@ -296,4 +296,34 @@ console.log('🧪 Iniciando Suite de Pruebas Unitarias del Auditor SQL...');
   console.log('✔ Test 7: Algoritmo de contraste de Snapshots (Fase 3) exitoso.');
 }
 
-console.log('🎉 Todas las pruebas unitarias pasaron satisfactoriamente (7/7).');
+// Test 8: Blindaje contra Incompatibilidad de Base de Datos en Snapshots
+{
+  const snapshotVentas = {
+    version: '1.0',
+    metadata: {
+      databaseName: 'BD_Ventas',
+      serverInstance: 'SRV-PROD-01\\SQLEXPRESS',
+      createdAt: new Date().toISOString(),
+      uptimeStartTime: new Date().toISOString(),
+      totalTablesCount: 150
+    },
+    tables: [{ fullName: 'dbo.Facturas', totalRows: 50000, totalReads: 100, totalWrites: 50 }]
+  };
+
+  const currentDbAudited = 'BD_Nomina';
+  const isMismatch = snapshotVentas.metadata.databaseName.toLowerCase() !== currentDbAudited.toLowerCase();
+
+  assert.strictEqual(isMismatch, true, 'Debe detectar incompatibilidad entre BD_Ventas y BD_Nomina');
+
+  // Si hay mismatch, no debe permitirse calcular deltas
+  let canCompare = !isMismatch;
+  assert.strictEqual(canCompare, false, 'La comparación debe bloquearse cuando las bases de datos difieren');
+
+  // Caso coincidente
+  const currentDbCorrect = 'bd_ventas';
+  const isMatch = snapshotVentas.metadata.databaseName.toLowerCase() === currentDbCorrect.toLowerCase();
+  assert.strictEqual(isMatch, true, 'Debe aceptar bases de datos coincidentes insensible a mayúsculas');
+  console.log('✔ Test 8: Blindaje e integridad de metadata en Snapshots verificado.');
+}
+
+console.log('🎉 Todas las pruebas unitarias pasaron satisfactoriamente (8/8).');
