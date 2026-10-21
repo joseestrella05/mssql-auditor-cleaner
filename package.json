@@ -1,0 +1,33 @@
+{
+  "name": "sql-auditor-web",
+  "version": "1.0.0",
+  "description": "Herramienta de auditoría y saneamiento de bases de datos para Microsoft SQL Server",
+  "private": true,
+  "scripts": {
+    "dev": "node -r ./patch-fs.js node_modules/next/dist/bin/next dev",
+    "build": "node -r ./patch-fs.js node_modules/next/dist/bin/next build",
+    "start": "node -r ./patch-fs.js node_modules/next/dist/bin/next start",
+    "test": "node -r ./patch-fs.js --experimental-strip-types test/test-crypto-and-db.js"
+  },
+  "dependencies": {
+    "@tanstack/react-virtual": "^3.14.21",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.61.0",
+    "msnodesqlv8": "^5.6.0",
+    "mssql": "^12.7.10",
+    "next": "^15.2.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^3.7.0"
+  },
+  "devDependencies": {
+    "@types/mssql": "^12.3.0",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.6.1",
+    "postcss": "^8.5.31",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.8.2"
+  }
+}
