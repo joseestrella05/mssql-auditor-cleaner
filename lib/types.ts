@@ -1,3 +1,5 @@
+export type DatabaseEngine = 'sqlserver' | 'postgres' | 'mysql' | 'sqlite';
+
 export type TableClassification = 'active' | 'readonly' | 'stale' | 'obsolete' | 'metadata';
 
 export interface TableMetric {
@@ -27,6 +29,11 @@ export interface TableMetric {
   classification: TableClassification;
   isPersistentZeroIo?: boolean;
 }
+
+/**
+ * Contrato TypeScript unificado estándar para auditoría de tablas en todos los motores
+ */
+export type TableAuditItem = TableMetric;
 
 export interface DatabaseItem {
   databaseId: number;
@@ -76,12 +83,36 @@ export interface AuditSummary {
 export interface SavedConnectionProfile {
   id: string;
   name: string;
+  engine?: DatabaseEngine;
   server: string;
+  port?: number;
+  database?: string;
   authMode: 'windows' | 'sql';
   user?: string;
+  sslMode?: 'disable' | 'require';
   encrypt: boolean;
   trustServerCertificate: boolean;
   createdAt: string;
+}
+
+export interface ArchiveScriptOptions {
+  targetSchema?: string;
+  databaseName?: string;
+  includeComments?: boolean;
+}
+
+export interface DatabaseConnectionConfig {
+  engine: DatabaseEngine;
+  connectionString?: string;
+  host?: string;
+  port?: number;
+  user?: string;
+  password?: string;
+  database?: string;
+  sslMode?: 'disable' | 'require';
+  authMode?: 'windows' | 'sql';
+  encrypt?: boolean;
+  trustServerCertificate?: boolean;
 }
 
 export interface TableDependencyDetail {

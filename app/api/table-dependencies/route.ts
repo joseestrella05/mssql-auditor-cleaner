@@ -14,7 +14,8 @@ export async function POST(req: NextRequest) {
       secretKey = '', 
       databaseName,
       tableFullName,
-      tableFullNames
+      tableFullNames,
+      engine = 'sqlserver'
     } = body;
 
     if (!encryptedConnectionString) {
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
     const flatList: TableDependencyDetail[] = [];
 
     for (const tbl of tablesToInspect) {
-      const deps = await getTableDependencies(plainConnectionString, databaseName, tbl);
+      const deps = await getTableDependencies(plainConnectionString, databaseName, tbl, engine);
       results[tbl] = deps;
       flatList.push(...deps);
     }

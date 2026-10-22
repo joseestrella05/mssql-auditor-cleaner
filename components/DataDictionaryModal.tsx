@@ -14,14 +14,16 @@ import {
   FileText,
   AlertCircle
 } from 'lucide-react';
-import { TableMetric, ColumnMetadata, ForeignKeyRelationship } from '@/lib/types';
+import { TableMetric, ColumnMetadata, ForeignKeyRelationship, DatabaseEngine } from '@/lib/types';
 
 interface DataDictionaryModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedTables: TableMetric[];
   databaseName: string;
+  engine?: DatabaseEngine;
   connectionPayload?: {
+    engine?: DatabaseEngine;
     encryptedConnectionString: string;
     algorithm: string;
     secretKey: string;
@@ -33,6 +35,7 @@ export function DataDictionaryModal({
   onClose,
   selectedTables,
   databaseName,
+  engine,
   connectionPayload,
 }: DataDictionaryModalProps) {
   const [activeTab, setActiveTab] = useState<'markdown' | 'mermaid'>('markdown');
@@ -53,6 +56,7 @@ export function DataDictionaryModal({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        engine: connectionPayload.engine || engine || 'sqlserver',
         encryptedConnectionString: connectionPayload.encryptedConnectionString,
         algorithm: connectionPayload.algorithm,
         secretKey: connectionPayload.secretKey,

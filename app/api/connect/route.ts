@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { encryptedConnectionString, algorithm = 'aes-256-gcm', secretKey = '' } = body;
+    const { encryptedConnectionString, algorithm = 'aes-256-gcm', secretKey = '', engine = 'sqlserver' } = body;
 
     if (!encryptedConnectionString) {
       return NextResponse.json(
@@ -31,18 +31,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Conexión y consulta de catálogo
-    const result = await testConnectionAndFetchDatabases(plainConnectionString);
+    // 2. Conexión y consulta de catálogo delegando en el proveedor del motor
+    const result = await testConnectionAndFetchDatabases(plainConnectionString, engine);
 
     return NextResponse.json({
       success: true,
+      engine,
       serverInfo: result.serverInfo,
       databases: result.databases,
     });
   } catch (err: any) {
     console.error('Error in /api/connect:', err);
     return NextResponse.json(
-      { error: `Error de conexión con Microsoft SQL Server: ${err.message || 'Fallo desconocido'}` },
+      { error: `Error de conexión con el motor de base de datos: ${err.message || 'Fallo desconocido'}` },
       { status: 500 }
     );
   }

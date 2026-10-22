@@ -6,9 +6,10 @@ import { ConnectionCard } from '@/components/ConnectionCard';
 import { DatabaseSelector } from '@/components/DatabaseSelector';
 import { KpiCards } from '@/components/KpiCards';
 import { DataTable } from '@/components/DataTable';
-import { AuditSummary, DatabaseItem, ServerInfo } from '@/lib/types';
+import { AuditSummary, DatabaseItem, ServerInfo, DatabaseEngine } from '@/lib/types';
 
 export default function HomePage() {
+  const [engine, setEngine] = useState<DatabaseEngine>('sqlserver');
   const [isLoadingConnection, setIsLoadingConnection] = useState(false);
   const [isAuditing, setIsAuditing] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
@@ -17,6 +18,7 @@ export default function HomePage() {
   const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
   const [databases, setDatabases] = useState<DatabaseItem[]>([]);
   const [connectionPayload, setConnectionPayload] = useState<{
+    engine: DatabaseEngine;
     encryptedConnectionString: string;
     algorithm: string;
     secretKey: string;
@@ -26,15 +28,18 @@ export default function HomePage() {
   const [auditSummary, setAuditSummary] = useState<AuditSummary | null>(null);
 
   const handleConnected = (data: {
+    engine: DatabaseEngine;
     serverInfo: ServerInfo;
     databases: DatabaseItem[];
     encryptedConnectionString: string;
     algorithm: string;
     secretKey: string;
   }) => {
+    setEngine(data.engine);
     setServerInfo(data.serverInfo);
     setDatabases(data.databases);
     setConnectionPayload({
+      engine: data.engine,
       encryptedConnectionString: data.encryptedConnectionString,
       algorithm: data.algorithm,
       secretKey: data.secretKey,
@@ -54,6 +59,7 @@ export default function HomePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          engine: connectionPayload.engine || engine,
           encryptedConnectionString: connectionPayload.encryptedConnectionString,
           algorithm: connectionPayload.algorithm,
           secretKey: connectionPayload.secretKey,
@@ -86,13 +92,13 @@ export default function HomePage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold text-white tracking-tight">MSSQL Auditor & Cleaner</h1>
+                <h1 className="text-base font-bold text-white tracking-tight">Multi-Engine Database Auditor</h1>
                 <span className="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">
-                  v2.0 Local
+                  v2.0 Multi-Engine
                 </span>
               </div>
               <p className="text-xs text-slate-400 hidden sm:block">
-                Auditoría de telemetría y saneamiento de tablas para Microsoft SQL Server
+                Auditoría de telemetría y saneamiento de tablas para SQL Server y PostgreSQL
               </p>
             </div>
           </div>
@@ -150,7 +156,7 @@ export default function HomePage() {
                   <span className="text-emerald-400 font-mono">[{auditSummary.databaseName}]</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Telemetría consolidada de particiones, índices de usuario y marcas temporales de I/O
+                  Telemetría consolidada de particiones, índices de usuario y marcas temporales de I/O ({engine.toUpperCase()})
                 </p>
               </div>
 
@@ -176,7 +182,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t border-slate-800/80 bg-slate-900/30 py-4 text-center text-xs text-slate-500">
         <p>
-          Herramienta de Auditoría y Saneamiento para Microsoft SQL Server • Diseñada para Arquitectura Full-Stack & DBA
+          Herramienta de Auditoría y Saneamiento Multi-Motor (SQL Server & PostgreSQL) • Diseñada para Arquitectura Full-Stack & DBA
         </p>
       </footer>
     </div>

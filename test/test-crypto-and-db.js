@@ -1,6 +1,7 @@
 const assert = require('assert');
 const { decryptConnectionString, encryptConnectionString } = require('../lib/crypto.ts');
 const { generateMarkdownReport, generateCsvReport } = require('../lib/export-helpers.ts');
+const { getDatabaseProvider, parsePostgresConfig, PostgresProvider, SqlServerProvider } = require('../lib/providers/index.ts');
 
 // Función de parseo aislada para verificación directa
 function parseConnectionStringToConfig(connStr, overrideDatabase) {
@@ -326,4 +327,145 @@ console.log('🧪 Iniciando Suite de Pruebas Unitarias del Auditor SQL...');
   console.log('✔ Test 8: Blindaje e integridad de metadata en Snapshots verificado.');
 }
 
-console.log('🎉 Todas las pruebas unitarias pasaron satisfactoriamente (8/8).');
+// Test 9: Factoría de Proveedores Multi-Engine y Cumplimiento de Contrato
+{
+  const sqlProvider = getDatabaseProvider('sqlserver');
+  assert(sqlProvider instanceof SqlServerProvider, 'Debe instanciar SqlServerProvider');
+  assert.strictEqual(sqlProvider.engine, 'sqlserver');
+
+  const pgProvider = getDatabaseProvider('postgres');
+  assert(pgProvider instanceof PostgresProvider, 'Debe instanciar PostgresProvider');
+  assert.strictEqual(pgProvider.engine, 'postgres');
+
+  // MySQL y SQLite deben existir en la arquitectura y lanzar mensajes informativos del roadmap
+  const mysqlProvider = getDatabaseProvider('mysql');
+  assert.strictEqual(mysqlProvider.engine, 'mysql');
+  assert.rejects(async () => {
+    await mysqlProvider.connect('Server=localhost');
+  }, /roadmap/, 'MySQL debe informar estado en roadmap');
+
+  const sqliteProvider = getDatabaseProvider('sqlite');
+  assert.strictEqual(sqliteProvider.engine, 'sqlite');
+  assert.rejects(async () => {
+    await sqliteProvider.connect('file.db');
+  }, /roadmap/, 'SQLite debe informar estado en roadmap');
+
+  console.log('✔ Test 9: Factoría Multi-Engine y stubs listos para MySQL y SQLite exitosos.');
+}
+
+// Test 10: Parser de Configuración y URIs de PostgreSQL
+{
+  // 10.1: URI estándar
+  const uri = 'postgresql://admin_user:P%40ss123@pg-cluster.corp.net:5433/prod_catalog?sslmode=require';
+  const cfg1 = parsePostgresConfig(uri);
+  assert.strictEqual(cfg1.host, 'pg-cluster.corp.net');
+  assert.strictEqual(cfg1.port, 5433);
+  assert.strictEqual(cfg1.user, 'admin_user');
+  assert.strictEqual(cfg1.password, 'P@ss123');
+  assert.strictEqual(cfg1.database, 'prod_catalog');
+  assert.deepStrictEqual(cfg1.ssl, { rejectUnauthorized: false });
+
+  // 10.2: Pares clave-valor con override de base de datos
+  const kv = 'Host=10.0.0.5;Port=5432;User=postgres;Password=secret;Database=template1;SSL Mode=disable';
+  const cfg2 = parsePostgresConfig(kv, 'custom_analytics');
+  assert.strictEqual(cfg2.host, '10.0.0.5');
+  assert.strictEqual(cfg2.port, 5432);
+  assert.strictEqual(cfg2.user, 'postgres');
+  assert.strictEqual(cfg2.password, 'secret');
+  assert.strictEqual(cfg2.database, 'custom_analytics', 'Override de base de datos debe prevalecer');
+  assert.strictEqual(cfg2.ssl, false);
+
+  console.log('✔ Test 10: Parser de URIs y configuraciones PostgreSQL exitoso.');
+}
+
+// Test 11: Generador DDL de Aislamiento para PostgreSQL (SET SCHEMA archive)
+{
+  const pgProvider = new PostgresProvider();
+  const mockTables = [
+    {
+      schemaName: 'public',
+      tableName: 'antiguos_logs',
+      fullName: 'public.antiguos_logs',
+      totalRows: 120000,
+      hasRows: true,
+      totalSizeMb: 45.5,
+      lobSizeMb: 12.0,
+      totalReads: 0,
+      totalSeeks: 0,
+      totalScans: 0,
+      totalLookups: 0,
+      totalWrites: 0,
+      lastReadDate: null,
+      lastWriteDate: null,
+      lastActivityDate: null,
+      daysSinceLastActivity: 95,
+      daysSinceLastRead: null,
+      daysSinceLastWrite: null,
+      incomingFkCount: 2,
+      referencingObjectsCount: 0,
+      dependenciesCount: 2,
+      seekScanRatio: 'NONE',
+      isSystemMetadata: false,
+      classification: 'obsolete',
+    }
+  ];
+
+  const script = pgProvider.generateArchiveScript(mockTables, {
+    targetSchema: 'archive',
+    databaseName: 'telemetry_db',
+  });
+
+  assert(script.includes('\\c "telemetry_db";'), 'Debe conectar a la base de datos de PostgreSQL');
+  assert(script.includes('CREATE SCHEMA IF NOT EXISTS "archive";'), 'Debe asegurar el schema archive');
+  assert(script.includes('ALTER TABLE "public"."antiguos_logs" SET SCHEMA "archive";'), 'Debe generar ALTER TABLE SET SCHEMA');
+  assert(script.includes('COMMENT ON TABLE "archive"."antiguos_logs" IS'), 'Debe generar metadatos de auditoría con COMMENT ON TABLE');
+  assert(script.includes('COMMIT;'), 'Debe encapsular en bloque transaccional');
+
+  console.log('✔ Test 11: Generador DDL de archivado PostgreSQL (SET SCHEMA archive) exitoso.');
+}
+
+// Test 12: Generador DDL de Aislamiento para SQL Server (ALTER SCHEMA TRANSFER)
+{
+  const sqlProvider = new SqlServerProvider();
+  const mockTables = [
+    {
+      schemaName: 'dbo',
+      tableName: 'TemporalOld',
+      fullName: 'dbo.TemporalOld',
+      totalRows: 500,
+      hasRows: true,
+      totalSizeMb: 1.5,
+      lobSizeMb: 0,
+      totalReads: 0,
+      totalSeeks: 0,
+      totalScans: 0,
+      totalLookups: 0,
+      totalWrites: 0,
+      lastReadDate: null,
+      lastWriteDate: null,
+      lastActivityDate: null,
+      daysSinceLastActivity: 120,
+      daysSinceLastRead: null,
+      daysSinceLastWrite: null,
+      incomingFkCount: 0,
+      referencingObjectsCount: 0,
+      dependenciesCount: 0,
+      seekScanRatio: 'NONE',
+      isSystemMetadata: false,
+      classification: 'obsolete',
+    }
+  ];
+
+  const script = sqlProvider.generateArchiveScript(mockTables, {
+    targetSchema: 'archive',
+    databaseName: 'ERP_Core',
+  });
+
+  assert(script.includes('USE [ERP_Core];'), 'Debe usar USE [db]');
+  assert(script.includes('ALTER SCHEMA [archive] TRANSFER [dbo].[TemporalOld];'), 'Debe usar ALTER SCHEMA TRANSFER');
+  assert(script.includes('sys.sp_addextendedproperty'), 'Debe agregar propiedades extendidas');
+
+  console.log('✔ Test 12: Generador DDL de archivado SQL Server (ALTER SCHEMA TRANSFER) exitoso.');
+}
+
+console.log('🎉 Todas las pruebas unitarias pasaron satisfactoriamente (12/12).');

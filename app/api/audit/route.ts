@@ -7,7 +7,14 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { encryptedConnectionString, algorithm = 'aes-256-gcm', secretKey = '', databaseName } = body;
+    const { 
+      encryptedConnectionString, 
+      algorithm = 'aes-256-gcm', 
+      secretKey = '', 
+      databaseName,
+      engine = 'sqlserver',
+      thresholdDays = 30
+    } = body;
 
     if (!encryptedConnectionString) {
       return NextResponse.json(
@@ -38,8 +45,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Ejecución de la auditoría profunda
-    const summary = await auditDatabase(plainConnectionString, databaseName);
+    // 2. Ejecución de la auditoría profunda mediante el proveedor del motor
+    const summary = await auditDatabase(plainConnectionString, databaseName, engine, thresholdDays);
 
     return NextResponse.json({
       success: true,

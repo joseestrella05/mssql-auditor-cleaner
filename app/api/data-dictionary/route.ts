@@ -12,7 +12,8 @@ export async function POST(req: NextRequest) {
       algorithm = 'aes-256-gcm', 
       secretKey = '', 
       databaseName,
-      tables
+      tables,
+      engine = 'sqlserver'
     } = body;
 
     if (!encryptedConnectionString) {
@@ -52,10 +53,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Columnas y tipos de datos
-    const columns = await getDataDictionary(plainConnectionString, databaseName, tables);
+    const columns = await getDataDictionary(plainConnectionString, databaseName, tables, engine);
 
     // 2. Claves foráneas para construir el Mermaid ERD
-    const allForeignKeys = await getForeignKeysForErd(plainConnectionString, databaseName);
+    const allForeignKeys = await getForeignKeysForErd(plainConnectionString, databaseName, engine);
 
     // Filtrar relaciones que involucran las tablas seleccionadas
     const selectedSet = new Set(tables.map(t => t.toLowerCase()));

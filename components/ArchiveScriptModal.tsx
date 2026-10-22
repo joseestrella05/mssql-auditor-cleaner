@@ -14,14 +14,16 @@ import {
   Info,
   CheckCircle2
 } from 'lucide-react';
-import { TableMetric, TableDependencyDetail } from '@/lib/types';
+import { TableMetric, TableDependencyDetail, DatabaseEngine } from '@/lib/types';
 
 interface ArchiveScriptModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedTables: TableMetric[];
   databaseName: string;
+  engine?: DatabaseEngine;
   connectionPayload?: {
+    engine?: DatabaseEngine;
     encryptedConnectionString: string;
     algorithm: string;
     secretKey: string;
@@ -33,6 +35,7 @@ export function ArchiveScriptModal({
   onClose,
   selectedTables,
   databaseName,
+  engine,
   connectionPayload,
 }: ArchiveScriptModalProps) {
   const [copied, setCopied] = useState(false);
@@ -59,6 +62,7 @@ export function ArchiveScriptModal({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        engine: connectionPayload.engine || engine || 'sqlserver',
         encryptedConnectionString: connectionPayload.encryptedConnectionString,
         algorithm: connectionPayload.algorithm,
         secretKey: connectionPayload.secretKey,
@@ -94,12 +98,70 @@ export function ArchiveScriptModal({
   const tablesWithDependencies = selectedTables.filter(t => t.dependenciesCount > 0);
   const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
 
-  // Generador de script SQL con soporte robusto de Foreign Keys y Schemabinding
+  const activeEngine = connectionPayload?.engine || engine || 'sqlserver';
+
+  // Generador de script SQL adaptado al motor activo (Transact-SQL o PostgreSQL)
   const generateSqlScript = () => {
     const lines: string[] = [];
 
+    if (activeEngine === 'postgres') {
+      lines.push('-- =================================================================');
+      lines.push(`-- SCRIPT DE SANEAMIENTO Y ARCHIVADO SEGURO DE TABLAS (POSTGRESQL)`);
+      lines.push(`-- Base de Datos: [${databaseName}]`);
+      lines.push(`-- Generado el: ${nowStr} (Auditoría DBA Senior)`);
+      lines.push(`-- Total de tablas a transferir: ${selectedTables.length}`);
+      lines.push('-- =================================================================');
+      lines.push(`\\c "${databaseName}";\n`);
+
+      lines.push('-- 1. Asegurar existencia del esquema de aislamiento/archivo');
+      lines.push(`CREATE SCHEMA IF NOT EXISTS "${targetSchema}";\n`);
+
+      lines.push('-- 2. Transferencia segura de esquemas en bloque transaccional');
+      lines.push('BEGIN;');
+
+      selectedTables.forEach((table) => {
+        const deps = dependencyMap[table.fullName] || [];
+        const fkDeps = deps.filter(d => d.dependencyType === 'FOREIGN_KEY');
+        const otherDeps = deps.filter(d => d.dependencyType === 'PROGRAMMABLE_OBJECT');
+
+        lines.push('');
+        lines.push(`  -- ---------------------------------------------------------------`);
+        lines.push(`  -- Tabla: "${table.schemaName}"."${table.tableName}" (${table.totalRows.toLocaleString()} filas, ${table.totalSizeMb.toFixed(2)} MB, LOBs: ${table.lobSizeMb || 0} MB)`);
+        lines.push(`  -- Ratio Seek/Scan: ${table.seekScanRatio || 'N/A'} | Última actividad: ${table.daysSinceLastActivity !== null ? `hace ${table.daysSinceLastActivity} días` : 'Nunca'}`);
+
+        if (fkDeps.length > 0) {
+          lines.push(`  -- ⚠️ ADVERTENCIA: ${fkDeps.length} Foreign Keys entrantes de tablas dependientes.`);
+          lines.push(`  -- En PostgreSQL, "SET SCHEMA" mantiene las FKs intactas.`);
+          lines.push(`  -- Si desea desvincular o truncar la tabla archivada, considere remover la restricción:`);
+          fkDeps.forEach(fk => {
+            lines.push(`  -- ALTER TABLE "${fk.referencingSchema}"."${fk.referencingName}" DROP CONSTRAINT "${fk.constraintName}";`);
+          });
+        }
+
+        if (otherDeps.length > 0) {
+          lines.push(`  -- ⚠️ Vistas dependientes detectadas en el catálogo:`);
+          otherDeps.forEach(od => {
+            lines.push(`  -- • "${od.referencingSchema}"."${od.referencingName}"`);
+          });
+        }
+
+        lines.push(`  -- ---------------------------------------------------------------`);
+        lines.push(`  ALTER TABLE "${table.schemaName}"."${table.tableName}" SET SCHEMA "${targetSchema}";`);
+        lines.push(`  COMMENT ON TABLE "${targetSchema}"."${table.tableName}" IS 'ArchivedAt: ${nowStr} | Reason: Saneamiento por auditoría de telemetría';`);
+      });
+
+      lines.push('');
+      lines.push('COMMIT;');
+      lines.push('');
+      lines.push(`-- Verificación de tablas transferidas:`);
+      lines.push(`-- SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = '${targetSchema}';\n`);
+
+      return lines.join('\n');
+    }
+
+    // Generador para SQL Server (Transact-SQL)
     lines.push('-- =================================================================');
-    lines.push(`-- SCRIPT DE SANEAMIENTO Y ARCHIVADO SEGURO DE TABLAS`);
+    lines.push(`-- SCRIPT DE SANEAMIENTO Y ARCHIVADO SEGURO DE TABLAS (SQL SERVER)`);
     lines.push(`-- Base de Datos: [${databaseName}]`);
     lines.push(`-- Generado el: ${nowStr} (Auditoría DBA Senior)`);
     lines.push(`-- Total de tablas a transferir: ${selectedTables.length}`);

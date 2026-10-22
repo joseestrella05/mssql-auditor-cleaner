@@ -3,7 +3,7 @@ require('./patch-fs.js');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['mssql', 'msnodesqlv8'],
+  serverExternalPackages: ['mssql', 'msnodesqlv8', 'pg'],
   typescript: {
     ignoreBuildErrors: true,
   },

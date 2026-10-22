@@ -27,7 +27,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { AuditSummary, TableClassification, TableMetric, AuditSnapshot } from '@/lib/types';
+import { AuditSummary, TableClassification, TableMetric, TableAuditItem, AuditSnapshot, DatabaseEngine } from '@/lib/types';
 import { generateMarkdownReport, generateCsvReport } from '@/lib/export-helpers';
 import { ArchiveScriptModal } from './ArchiveScriptModal';
 import { DataDictionaryModal } from './DataDictionaryModal';
@@ -35,7 +35,9 @@ import { SnapshotCompareModal } from './SnapshotCompareModal';
 
 interface DataTableProps {
   summary: AuditSummary;
+  engine?: DatabaseEngine;
   connectionPayload?: {
+    engine?: DatabaseEngine;
     encryptedConnectionString: string;
     algorithm: string;
     secretKey: string;
