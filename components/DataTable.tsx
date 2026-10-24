@@ -153,6 +153,41 @@ export function DataTable({ summary, connectionPayload }: DataTableProps) {
     });
   }, [classifiedTables, filterTab, debouncedSearch, sortField, sortDirection, persistentZeroIoFilter]);
 
+  // Definición de pestañas de filtro (clases estáticas para Tailwind JIT)
+  const filterTabs: { key: 'all' | TableClassification; label: string; count: number; dotCls: string; activeCls: string }[] = [
+    { key: 'all', label: 'Todas', count: counts.all, dotCls: 'bg-slate-300', activeCls: 'bg-slate-700 text-white ring-slate-500/60' },
+    { key: 'active', label: 'Activas', count: counts.active, dotCls: 'bg-emerald-400', activeCls: 'bg-emerald-500/15 text-emerald-200 ring-emerald-500/40' },
+    { key: 'readonly', label: 'Solo Lectura', count: counts.readonly, dotCls: 'bg-amber-400', activeCls: 'bg-amber-500/15 text-amber-200 ring-amber-500/40' },
+    { key: 'stale', label: `Estancadas >${inactivityThreshold}d`, count: counts.stale, dotCls: 'bg-orange-400', activeCls: 'bg-orange-500/15 text-orange-200 ring-orange-500/40' },
+    { key: 'obsolete', label: '0 I/O Total', count: counts.obsolete, dotCls: 'bg-rose-400', activeCls: 'bg-rose-500/15 text-rose-200 ring-rose-500/40' },
+    ...(counts.metadata > 0
+      ? [{ key: 'metadata' as const, label: 'Metadatos', count: counts.metadata, dotCls: 'bg-slate-500', activeCls: 'bg-slate-700 text-slate-100 ring-slate-500/60' }]
+      : []),
+  ];
+
+  const hasActiveFilters = filterTab !== 'all' || !!debouncedSearch.trim() || !!persistentZeroIoFilter;
+  const clearAllFilters = () => {
+    setFilterTab('all');
+    setSearchInput('');
+    setDebouncedSearch('');
+    setPersistentZeroIoFilter(null);
+  };
+
+  // Atajo "/" para enfocar la búsqueda (estilo Datadog/GitHub)
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isTyping = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      if (e.key === '/' && !isTyping) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // Lista de tablas seleccionadas
   const selectedTablesList = useMemo(() => {
     return filteredTables.filter(t => selectedTablesMap[t.fullName]);
@@ -206,7 +241,7 @@ export function DataTable({ summary, connectionPayload }: DataTableProps) {
   const rowVirtualizer = useVirtualizer({
     count: filteredTables.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 54,
+    estimateSize: () => 48,
     overscan: 15,
   });
 
@@ -327,6 +362,26 @@ export function DataTable({ summary, connectionPayload }: DataTableProps) {
       <ArrowUp className="w-3.5 h-3.5 text-blue-400 inline ml-1" />
     ) : (
       <ArrowDown className="w-3.5 h-3.5 text-blue-400 inline ml-1" />
+    );
+  };
+
+  const renderSortHeader = (field: SortField, label: string, className: string) => {
+    const isSorted = sortField === field;
+    return (
+      <div
+        className={className.includes('justify-') ? `${className} flex` : className}
+        aria-sort={isSorted ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+      >
+        <button
+          type="button"
+          onClick={() => handleSort(field)}
+          className={`inline-flex items-center rounded px-1 -mx-1 py-0.5 uppercase tracking-[0.06em] transition-colors hover:text-slate-200 hover:bg-slate-800/60 ${
+            isSorted ? 'text-slate-200' : ''
+          }`}
+        >
+          {label} {renderSortIcon(field)}
+        </button>
+      </div>
     );
   };
 
@@ -497,58 +552,39 @@ export function DataTable({ summary, connectionPayload }: DataTableProps) {
 
       {/* Barra de Acciones y Pestañas */}
       <div className="p-4 border-b border-slate-800 bg-slate-900/80 flex flex-col 2xl:flex-row items-stretch 2xl:items-center justify-between gap-4">
-        {/* Pestañas de Filtro Rápido - Con flex-wrap y no-scrollbar sin barra nativa gris */}
-        <div className="flex flex-wrap items-center gap-1.5 no-scrollbar">
-          <button
-            onClick={() => { setFilterTab('all'); setPersistentZeroIoFilter(null); }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition whitespace-nowrap ${
-              filterTab === 'all' && !persistentZeroIoFilter
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-            }`}
-          >
-            Todas ({counts.all})
-          </button>
-          <button
-            onClick={() => { setFilterTab('active'); setPersistentZeroIoFilter(null); }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition whitespace-nowrap ${
-              filterTab === 'active'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
-                : 'text-slate-400 hover:text-emerald-400 hover:bg-slate-800/60'
-            }`}
-          >
-            🟢 Activas ({counts.active})
-          </button>
-          <button
-            onClick={() => { setFilterTab('readonly'); setPersistentZeroIoFilter(null); }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition whitespace-nowrap ${
-              filterTab === 'readonly'
-                ? 'bg-amber-600 text-white shadow-md shadow-amber-500/20'
-                : 'text-slate-400 hover:text-amber-400 hover:bg-slate-800/60'
-            }`}
-          >
-            🟡 Solo Lectura ({counts.readonly})
-          </button>
-          <button
-            onClick={() => { setFilterTab('stale'); setPersistentZeroIoFilter(null); }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition whitespace-nowrap ${
-              filterTab === 'stale'
-                ? 'bg-orange-600 text-white shadow-md shadow-orange-500/20'
-                : 'text-slate-400 hover:text-orange-400 hover:bg-slate-800/60'
-            }`}
-          >
-            🟠 Estancadas &gt;{inactivityThreshold}d ({counts.stale})
-          </button>
-          <button
-            onClick={() => { setFilterTab('obsolete'); setPersistentZeroIoFilter(null); }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition whitespace-nowrap ${
-              filterTab === 'obsolete'
-                ? 'bg-rose-600 text-white shadow-md shadow-rose-500/20'
-                : 'text-slate-400 hover:text-rose-400 hover:bg-slate-800/60'
-            }`}
-          >
-            🔴 0 I/O Total ({counts.obsolete})
-          </button>
+        {/* Pestañas de Filtro Rápido: control segmentado con contador por clasificación */}
+        <div
+          role="tablist"
+          aria-label="Filtrar por clasificación"
+          className="flex flex-wrap items-center gap-1 p-1 bg-slate-950/70 border border-slate-800 rounded-xl"
+        >
+          {filterTabs.map((tab) => {
+            const isActive = filterTab === tab.key && (tab.key !== 'all' || !persistentZeroIoFilter);
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => { setFilterTab(tab.key); setPersistentZeroIoFilter(null); }}
+                className={`group inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ring-1 ring-inset ${
+                  isActive
+                    ? tab.activeCls
+                    : 'ring-transparent text-slate-400 hover:text-slate-100 hover:bg-slate-800/70'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${tab.dotCls} ${isActive ? '' : 'opacity-60 group-hover:opacity-100'}`} />
+                <span>{tab.label}</span>
+                <span
+                  className={`min-w-[1.75rem] px-1.5 py-px rounded text-[10.5px] font-mono tabular-nums text-center ${
+                    isActive ? 'bg-black/25 text-white' : 'bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Botones de Acción DBA: Script DDL, Documentación y Snapshots */}
@@ -630,15 +666,31 @@ export function DataTable({ summary, connectionPayload }: DataTableProps) {
       {/* Barra de Búsqueda con Debounce y Selección Rápida */}
       <div className="p-4 bg-slate-950/40 border-b border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+          <div className="relative w-full sm:w-96">
+            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
+              ref={searchInputRef}
               type="text"
               placeholder="Buscar por tabla o esquema (ej: sales., tmp_)..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+              onKeyDown={(e) => { if (e.key === 'Escape') { setSearchInput(''); e.currentTarget.blur(); } }}
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-10 py-2 text-xs text-slate-200 placeholder:text-slate-600 transition-colors hover:border-slate-700 focus:outline-none focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/20 font-mono"
             />
+            {searchInput ? (
+              <button
+                type="button"
+                onClick={() => { setSearchInput(''); searchInputRef.current?.focus(); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-slate-500 hover:text-slate-200 hover:bg-slate-800"
+                aria-label="Limpiar búsqueda"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-px rounded border border-slate-700 bg-slate-900 text-[10px] font-mono text-slate-500 pointer-events-none">
+                /
+              </kbd>
+            )}
           </div>
 
           <button
@@ -658,18 +710,19 @@ export function DataTable({ summary, connectionPayload }: DataTableProps) {
               <span>Mostrando {filteredTables.length} tablas</span>
             )}
           </span>
-          <span className="text-[11px] bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700/50">
-            Virtualización 60 FPS
+          <span className="inline-flex items-center gap-1.5 text-[10.5px] text-slate-500 px-2 py-1 rounded-md ring-1 ring-inset ring-slate-800">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            Virtualizado
           </span>
         </div>
       </div>
 
       {/* Contenedor Horizontal Amplio de la Tabla con Scrollbar Oscuro */}
       <div className="overflow-x-auto custom-scrollbar w-full">
-        <div className="min-w-[1200px] w-full">
+        <div className="min-w-[1120px] w-full">
           {/* Encabezado Fijo de Columnas */}
-          <div className="bg-slate-950/90 border-b border-slate-800 text-slate-400 text-xs font-semibold select-none flex items-center px-4 py-3">
-            <div className="w-12 shrink-0">
+          <div className="bg-slate-950 border-b border-slate-800 text-slate-500 text-[10.5px] font-semibold uppercase tracking-[0.06em] select-none flex items-center pl-4 pr-2 h-10">
+            <div className="w-10 shrink-0">
               <button
                 type="button"
                 onClick={toggleSelectAllFiltered}
@@ -685,45 +738,52 @@ export function DataTable({ summary, connectionPayload }: DataTableProps) {
               </button>
             </div>
 
-            <div className="flex-1 min-w-[280px] cursor-pointer hover:text-slate-200" onClick={() => handleSort('fullName')}>
-              Tabla y Esquema {renderSortIcon('fullName')}
-            </div>
+            {renderSortHeader('fullName', 'Tabla y Esquema', 'flex-1 min-w-[300px]')}
 
-            <div className="w-40 shrink-0 text-center">Estado Diagnóstico</div>
+            <div className="w-40 shrink-0 text-center">Estado</div>
 
-            <div className="w-40 shrink-0 text-center cursor-pointer hover:text-slate-200" onClick={() => handleSort('dependenciesCount')}>
-              Dependencias {renderSortIcon('dependenciesCount')}
-            </div>
-
-            <div className="w-44 shrink-0 cursor-pointer hover:text-slate-200" onClick={() => handleSort('daysSinceLastActivity')}>
-              Última Actividad {renderSortIcon('daysSinceLastActivity')}
-            </div>
-
-            <div className="w-32 shrink-0 text-right cursor-pointer hover:text-slate-200" onClick={() => handleSort('totalRows')}>
-              Filas {renderSortIcon('totalRows')}
-            </div>
-
-            <div className="w-32 shrink-0 text-right cursor-pointer hover:text-slate-200" onClick={() => handleSort('totalSizeMb')}>
-              Tamaño (MB) {renderSortIcon('totalSizeMb')}
-            </div>
-
-            <div className="w-32 shrink-0 text-right cursor-pointer hover:text-slate-200" onClick={() => handleSort('totalReads')}>
-              Lecturas {renderSortIcon('totalReads')}
-            </div>
-
-            <div className="w-28 shrink-0 text-right cursor-pointer hover:text-slate-200 pr-4" onClick={() => handleSort('totalWrites')}>
-              Escrituras {renderSortIcon('totalWrites')}
-            </div>
+            {renderSortHeader('dependenciesCount', 'Dependencias', 'w-32 shrink-0 justify-center')}
+            {renderSortHeader('daysSinceLastActivity', 'Última Actividad', 'w-44 shrink-0')}
+            {renderSortHeader('totalRows', 'Filas', 'w-28 shrink-0 justify-end')}
+            {renderSortHeader('totalSizeMb', 'Tamaño (MB)', 'w-28 shrink-0 justify-end')}
+            {renderSortHeader('totalReads', 'Lecturas', 'w-28 shrink-0 justify-end')}
+            {renderSortHeader('totalWrites', 'Escrituras', 'w-28 shrink-0 justify-end pr-3')}
           </div>
 
           {/* Contenedor Virtualizado con @tanstack/react-virtual para 700+ Filas a 60 FPS */}
           <div 
             ref={parentRef}
-            className="overflow-y-auto custom-scrollbar h-[600px] relative divide-y divide-slate-800/40 bg-slate-950/20 font-mono text-xs text-slate-300"
+            className="overflow-y-auto custom-scrollbar h-[68vh] min-h-[420px] max-h-[860px] relative bg-slate-950/20 font-mono text-xs text-slate-300"
           >
             {filteredTables.length === 0 ? (
-              <div className="py-20 text-center text-slate-500 font-sans">
-                No se encontraron tablas que coincidan con los criterios de búsqueda.
+              <div className="h-full flex flex-col items-center justify-center gap-3 px-6 text-center font-sans">
+                <div className="grid place-items-center w-12 h-12 rounded-xl bg-slate-900 ring-1 ring-slate-800">
+                  <Search className="w-5 h-5 text-slate-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-slate-200">Sin resultados</p>
+                  <p className="mt-1 text-xs text-slate-500 max-w-sm">
+                    {debouncedSearch.trim() ? (
+                      <>Ninguna tabla coincide con <code className="text-slate-300">&quot;{debouncedSearch}&quot;</code></>
+                    ) : (
+                      <>No hay tablas en esta clasificación</>
+                    )}
+                    {filterTab !== 'all' && (
+                      <> dentro de <span className="text-slate-300">{filterTabs.find(t => t.key === filterTab)?.label}</span></>
+                    )}
+                    {persistentZeroIoFilter && <> con el filtro de snapshot activo</>}.
+                  </p>
+                </div>
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 ring-1 ring-inset ring-slate-700 transition-colors"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    Limpiar filtros
+                  </button>
+                )}
               </div>
             ) : (
               <div
@@ -736,6 +796,14 @@ export function DataTable({ summary, connectionPayload }: DataTableProps) {
                 {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                   const table = filteredTables[virtualRow.index];
                   const isSelected = !!selectedTablesMap[table.fullName];
+                  const isZeroReads = table.totalReads === 0 && table.classification !== 'metadata';
+                  const rowTone = isSelected
+                    ? 'bg-indigo-500/[0.09] shadow-[inset_3px_0_0_0_rgb(129,140,248)]'
+                    : isZeroReads
+                      ? 'bg-rose-500/[0.04] shadow-[inset_3px_0_0_0_rgba(244,63,94,0.7)] hover:bg-rose-500/[0.08]'
+                      : virtualRow.index % 2 === 1
+                        ? 'bg-slate-900/40 hover:bg-slate-800/50'
+                        : 'hover:bg-slate-800/50';
 
                   return (
                     <div
@@ -748,32 +816,33 @@ export function DataTable({ summary, connectionPayload }: DataTableProps) {
                         height: `${virtualRow.size}px`,
                         transform: `translateY(${virtualRow.start}px)`,
                       }}
-                      className={`flex items-center px-4 hover:bg-slate-800/40 transition border-b border-slate-800/40 ${
-                        isSelected ? 'bg-indigo-950/30' : ''
-                      }`}
+                      className={`group flex items-center pl-4 pr-2 transition-colors border-b border-slate-800/50 ${rowTone}`}
                     >
                       {/* Checkbox de Selección */}
-                      <div className="w-12 shrink-0">
+                      <div className="w-10 shrink-0">
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleTableRow(table.fullName)}
-                          className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          aria-label={`Seleccionar ${table.fullName}`}
+                          className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer"
                         />
                       </div>
 
                       {/* Nombre y Esquema */}
-                      <div className="flex-1 min-w-[280px] font-sans font-medium text-slate-200 truncate">
-                        <span className="text-slate-500">{table.schemaName}.</span>
-                        <span className="text-white font-semibold">{table.tableName}</span>
+                      <div className="flex-1 min-w-[300px] flex items-center gap-2 font-sans text-slate-200 pr-3 overflow-hidden" title={table.fullName}>
+                        <span className="truncate">
+                          <span className="text-slate-500">{table.schemaName}.</span>
+                          <span className={`font-semibold ${isZeroReads ? 'text-rose-100' : 'text-white'}`}>{table.tableName}</span>
+                        </span>
                         {table.totalRows === 0 && (
-                          <span className="ml-2 text-[10px] text-slate-500 bg-slate-800/70 px-1.5 py-0.5 rounded">
+                          <span className="shrink-0 text-[10px] text-slate-500 bg-slate-800/70 px-1.5 py-0.5 rounded">
                             0 filas
                           </span>
                         )}
                         {table.seekScanRatio === 'SCAN_ONLY' && (
-                          <span 
-                            className="ml-2 text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded"
+                          <span
+                            className="shrink-0 text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded"
                             title="Solo se accede mediante table scans de barrido completo (posible mantenimiento/auditoría sin uso por índices)"
                           >
                             SCAN ONLY
@@ -787,17 +856,17 @@ export function DataTable({ summary, connectionPayload }: DataTableProps) {
                       </div>
 
                       {/* Dependencias (FKs y Vistas) */}
-                      <div className="w-40 shrink-0 text-center font-sans">
+                      <div className="w-32 shrink-0 text-center font-sans">
                         {table.dependenciesCount > 0 ? (
                           <span 
                             className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full"
                             title={`${table.incomingFkCount} Foreign Keys entrantes, ${table.referencingObjectsCount} vistas/SPs que dependen de ella`}
                           >
                             <ShieldAlert className="w-3 h-3 text-amber-400 shrink-0" />
-                            <span>{table.dependenciesCount} dependencias</span>
+                            <span className="tabular-nums">{table.dependenciesCount}</span>
                           </span>
                         ) : (
-                          <span className="text-slate-600 text-[11px]">0 dependencias</span>
+                          <span className="text-slate-700 text-[11px]">—</span>
                         )}
                       </div>
 
@@ -807,12 +876,12 @@ export function DataTable({ summary, connectionPayload }: DataTableProps) {
                       </div>
 
                       {/* Filas */}
-                      <div className="w-32 shrink-0 text-right text-slate-200">
+                      <div className="w-28 shrink-0 text-right text-slate-200 tabular-nums">
                         {table.totalRows.toLocaleString()}
                       </div>
 
                       {/* Tamaño Físico (incluyendo LOBs) */}
-                      <div className="w-32 shrink-0 text-right text-slate-400" title={table.lobSizeMb > 0 ? `LOBs: ${table.lobSizeMb} MB` : undefined}>
+                      <div className="w-28 shrink-0 text-right text-slate-400 tabular-nums" title={table.lobSizeMb > 0 ? `LOBs: ${table.lobSizeMb} MB` : undefined}>
                         <span>{table.totalSizeMb.toFixed(2)}</span>
                         {table.lobSizeMb > 0 && (
                           <span className="text-[10px] text-indigo-400 block -mt-1 font-sans">
@@ -822,14 +891,20 @@ export function DataTable({ summary, connectionPayload }: DataTableProps) {
                       </div>
 
                       {/* Lecturas */}
-                      <div className="w-32 shrink-0 text-right">
-                        <span className={table.totalReads > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-500'}>
-                          {table.totalReads.toLocaleString()}
-                        </span>
+                      <div className="w-28 shrink-0 text-right tabular-nums">
+                        {isZeroReads ? (
+                          <span className="inline-flex items-center px-1.5 py-px rounded text-rose-300 bg-rose-500/10 ring-1 ring-inset ring-rose-500/30 font-semibold">
+                            0
+                          </span>
+                        ) : (
+                          <span className={table.totalReads > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-500'}>
+                            {table.totalReads.toLocaleString()}
+                          </span>
+                        )}
                       </div>
 
                       {/* Escrituras */}
-                      <div className="w-28 shrink-0 text-right pr-4">
+                      <div className="w-28 shrink-0 text-right pr-3 tabular-nums">
                         <span className={table.totalWrites > 0 ? 'text-blue-400 font-semibold' : 'text-slate-500'}>
                           {table.totalWrites.toLocaleString()}
                         </span>

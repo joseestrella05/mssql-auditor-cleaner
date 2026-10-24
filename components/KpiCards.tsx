@@ -1,18 +1,19 @@
 'use client';
 
 import React from 'react';
-import { 
-  TableProperties, 
-  Activity, 
-  Archive, 
-  Trash2, 
-  Clock, 
-  Info, 
-  CalendarClock, 
-  HardDriveDownload, 
+import {
+  TableProperties,
+  Activity,
+  Archive,
+  Trash2,
+  Radio,
+  CalendarClock,
+  HardDriveDownload,
   AlertTriangle,
-  FolderMinus,
-  Binary
+  ShieldCheck,
+  ShieldAlert,
+  ShieldX,
+  type LucideIcon,
 } from 'lucide-react';
 import { AuditSummary } from '@/lib/types';
 
@@ -20,176 +21,298 @@ interface KpiCardsProps {
   summary: AuditSummary;
 }
 
+type Tone = 'neutral' | 'emerald' | 'amber' | 'orange' | 'rose' | 'indigo';
+
+// Clases estáticas por tono (Tailwind JIT necesita los nombres completos)
+const TONES: Record<Tone, { value: string; icon: string; bar: string; card: string; pill: string }> = {
+  neutral: {
+    value: 'text-white',
+    icon: 'text-slate-300 bg-slate-800/80 ring-slate-700',
+    bar: 'bg-slate-500',
+    card: 'border-slate-800 hover:border-slate-700',
+    pill: 'text-slate-300 bg-slate-800 ring-slate-700',
+  },
+  emerald: {
+    value: 'text-emerald-300',
+    icon: 'text-emerald-400 bg-emerald-500/10 ring-emerald-500/25',
+    bar: 'bg-emerald-400',
+    card: 'border-slate-800 hover:border-emerald-500/40',
+    pill: 'text-emerald-300 bg-emerald-500/10 ring-emerald-500/25',
+  },
+  amber: {
+    value: 'text-amber-300',
+    icon: 'text-amber-400 bg-amber-500/10 ring-amber-500/25',
+    bar: 'bg-amber-400',
+    card: 'border-slate-800 hover:border-amber-500/40',
+    pill: 'text-amber-300 bg-amber-500/10 ring-amber-500/25',
+  },
+  orange: {
+    value: 'text-orange-300',
+    icon: 'text-orange-400 bg-orange-500/10 ring-orange-500/25',
+    bar: 'bg-orange-400',
+    card: 'border-slate-800 hover:border-orange-500/40',
+    pill: 'text-orange-300 bg-orange-500/10 ring-orange-500/25',
+  },
+  rose: {
+    value: 'text-rose-300',
+    icon: 'text-rose-400 bg-rose-500/10 ring-rose-500/25',
+    bar: 'bg-rose-400',
+    card: 'border-rose-500/25 hover:border-rose-500/50 bg-gradient-to-b from-rose-500/[0.06] to-transparent',
+    pill: 'text-rose-300 bg-rose-500/10 ring-rose-500/30',
+  },
+  indigo: {
+    value: 'text-indigo-200',
+    icon: 'text-indigo-300 bg-indigo-500/15 ring-indigo-400/30',
+    bar: 'bg-indigo-400',
+    card: 'border-indigo-500/30 hover:border-indigo-400/60 bg-gradient-to-b from-indigo-500/[0.08] to-transparent',
+    pill: 'text-indigo-200 bg-indigo-500/15 ring-indigo-400/30',
+  },
+};
+
+interface KpiCardProps {
+  label: string;
+  icon: LucideIcon;
+  tone: Tone;
+  value: React.ReactNode;
+  unit?: string;
+  pct?: number;
+  footnote: React.ReactNode;
+  badge?: React.ReactNode;
+}
+
+function KpiCard({ label, icon: Icon, tone, value, unit, pct, footnote, badge }: KpiCardProps) {
+  const t = TONES[tone];
+  return (
+    <div
+      className={`group relative flex flex-col justify-between gap-3 rounded-xl border bg-slate-900/80 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/30 ${t.card}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+          {label}
+        </span>
+        <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ring-1 ring-inset ${t.icon}`}>
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+      </div>
+
+      <div>
+        <div className="flex items-baseline gap-1.5">
+          <span className={`text-[28px] leading-none font-semibold tracking-tight tabular-nums ${t.value}`}>
+            {value}
+          </span>
+          {unit && <span className="text-xs font-medium text-slate-500">{unit}</span>}
+          {pct !== undefined && (
+            <span className={`ml-auto rounded px-1.5 py-0.5 text-[10.5px] font-semibold tabular-nums ring-1 ring-inset ${t.pill}`}>
+              {pct}%
+            </span>
+          )}
+        </div>
+
+        {/* Barra de proporción respecto al total */}
+        <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-slate-800">
+          <div
+            className={`h-full rounded-full transition-[width] duration-700 ease-out ${t.bar}`}
+            style={{ width: `${Math.min(100, Math.max(0, pct ?? 100))}%` }}
+          />
+        </div>
+
+        <div className="mt-2 flex min-h-[18px] items-center justify-between gap-2 text-[11px] text-slate-500">
+          <span className="truncate">{footnote}</span>
+          {badge}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function KpiCards({ summary }: KpiCardsProps) {
   const { kpis, uptimeFormatted, sqlServerStartTime, uptimeDays } = summary;
   const staleCount = kpis.staleCount || 0;
   const stalePct = kpis.stalePct || 0;
 
-  // Formato para Espacio Recuperable (MB o GB)
-  const formatSpace = (mb: number) => {
+  // Formato para Espacio Recuperable (MB o GB) separado en valor y unidad
+  const formatSpace = (mb: number): [string, string] => {
     if (mb >= 1024) {
-      return `${(mb / 1024).toFixed(2)} GB`;
+      return [(mb / 1024).toFixed(2), 'GB'];
     }
-    return `${mb.toFixed(2)} MB`;
+    return [mb.toFixed(2), 'MB'];
   };
+  const [spaceValue, spaceUnit] = formatSpace(kpis.reclaimableSizeMb);
+  const reclaimablePct = kpis.totalSizeMb > 0
+    ? Math.round((kpis.reclaimableSizeMb / kpis.totalSizeMb) * 1000) / 10
+    : 0;
+
+  // Salud del esquema: proporción de tablas sin uso (0 I/O + estancadas)
+  const unusedPct = (kpis.obsoletePct || 0) + stalePct;
+  const health =
+    unusedPct >= 40
+      ? { label: 'Crítico', icon: ShieldX, cls: 'text-rose-300 bg-rose-500/10 ring-rose-500/30', dot: 'bg-rose-400' }
+      : unusedPct >= 15
+        ? { label: 'Requiere atención', icon: ShieldAlert, cls: 'text-amber-300 bg-amber-500/10 ring-amber-500/30', dot: 'bg-amber-400' }
+        : { label: 'Saludable', icon: ShieldCheck, cls: 'text-emerald-300 bg-emerald-500/10 ring-emerald-500/30', dot: 'bg-emerald-400' };
+  const HealthIcon = health.icon;
+
+  // Ventana de telemetría corta = DMVs reiniciadas recientemente, métricas poco representativas
+  const shortWindow = uptimeDays < 7;
+
+  const distribution = [
+    { key: 'active', pct: kpis.activePct, cls: 'bg-emerald-400', label: 'Activas' },
+    { key: 'readonly', pct: kpis.readOnlyPct, cls: 'bg-amber-400', label: 'Solo lectura' },
+    { key: 'stale', pct: stalePct, cls: 'bg-orange-400', label: 'Estancadas' },
+    { key: 'obsolete', pct: kpis.obsoletePct, cls: 'bg-rose-400', label: '0 I/O' },
+  ];
 
   return (
-    <div className="space-y-4">
-      {/* Aviso de Contextualización del DBA con Alertas Clave */}
-      <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs text-slate-300">
-        <div className="flex items-start gap-3">
-          <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-white mb-0.5">
-              Buffer de Telemetría Activo: {uptimeFormatted} (desde el {new Date(sqlServerStartTime).toLocaleDateString()})
+    <section className="space-y-3">
+      {/* Barra de estado: ventana de telemetría, salud del esquema y alertas */}
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="relative flex h-2.5 w-2.5 shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-60" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-sky-400" />
+          </span>
+          <div className="min-w-0 text-xs">
+            <p className="flex flex-wrap items-center gap-x-2 font-medium text-slate-200">
+              <Radio className="h-3.5 w-3.5 text-sky-400" />
+              <span>Ventana de telemetría</span>
+              <span className="font-mono text-sky-300 tabular-nums">{uptimeFormatted}</span>
+              <span className="text-slate-500">
+                desde {new Date(sqlServerStartTime).toLocaleDateString()}
+              </span>
             </p>
-            <p className="text-slate-400">
-              Métricas consolidadas de <code className="text-blue-300">sys.dm_db_partition_stats</code>, <code className="text-blue-300">sys.dm_db_index_usage_stats</code> y detección de Foreign Keys / dependencias programables.
+            <p className="mt-0.5 truncate text-[11px] text-slate-500">
+              Fuente: <code className="text-slate-400">sys.dm_db_partition_stats</code> ·{' '}
+              <code className="text-slate-400">sys.dm_db_index_usage_stats</code> · FKs y dependencias programables
             </p>
           </div>
         </div>
 
-        {/* Alerta de Dependencias en Tablas Inactivas */}
-        {kpis.tablesWithDependenciesCount > 0 && (
-          <div className="flex items-center gap-2 px-3.5 py-2 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-xl shrink-0 font-medium">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-            <span>{kpis.tablesWithDependenciesCount} tablas inactivas tienen dependencias (FKs/Vistas)</span>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium">
+          {shortWindow && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-amber-300 ring-1 ring-inset ring-amber-500/30 bg-amber-500/10"
+              title="El contador de uso se reinicia con cada arranque del servicio. Con menos de 7 días de uptime, las métricas pueden no ser representativas."
+            >
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Ventana corta (&lt;7d)
+            </span>
+          )}
+          {kpis.tablesWithDependenciesCount > 0 && (
+            <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-amber-300 ring-1 ring-inset ring-amber-500/30 bg-amber-500/10">
+              <ShieldAlert className="h-3.5 w-3.5" />
+              <span className="tabular-nums">{kpis.tablesWithDependenciesCount}</span> inactivas con FKs/Vistas
+            </span>
+          )}
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 ring-1 ring-inset ${health.cls}`}
+            title={`${unusedPct.toFixed(1)}% de las tablas sin uso (0 I/O + estancadas)`}
+          >
+            <HealthIcon className="h-3.5 w-3.5" />
+            Esquema: {health.label}
+          </span>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5">
-        {/* KPI: Total Tablas */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-medium">Total Tablas</span>
-            <div className="p-1.5 bg-slate-800 rounded-lg text-slate-300">
-              <TableProperties className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-white tracking-tight">
-              {kpis.totalTables.toLocaleString()}
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
-              <span>{kpis.totalRows.toLocaleString()} filas</span>
+      {/* Distribución de clasificación en una sola barra */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3">
+        <div className="flex h-2 w-full overflow-hidden rounded-full bg-slate-800">
+          {distribution.map((d) => (
+            <div
+              key={d.key}
+              className={`${d.cls} h-full transition-[width] duration-700 ease-out first:rounded-l-full last:rounded-r-full`}
+              style={{ width: `${d.pct}%` }}
+              title={`${d.label}: ${d.pct}%`}
+            />
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400">
+          {distribution.map((d) => (
+            <span key={d.key} className="inline-flex items-center gap-1.5">
+              <span className={`h-2 w-2 rounded-sm ${d.cls}`} />
+              {d.label}
+              <span className="font-mono text-slate-300 tabular-nums">{d.pct}%</span>
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <KpiCard
+          label="Total tablas"
+          icon={TableProperties}
+          tone="neutral"
+          value={kpis.totalTables.toLocaleString()}
+          footnote={
+            <>
+              <span className="tabular-nums">{kpis.totalRows.toLocaleString()}</span> filas
               {kpis.emptyTablesCount > 0 && (
-                <span className="text-slate-500">({kpis.emptyTablesCount} vacías)</span>
+                <span className="text-slate-600"> · {kpis.emptyTablesCount} vacías</span>
               )}
-            </p>
-          </div>
-        </div>
+            </>
+          }
+        />
 
-        {/* KPI: Activas Recientes */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-emerald-400 mb-2">
-            <span className="text-xs font-medium text-slate-400">Activas</span>
-            <div className="p-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-              <Activity className="w-4 h-4 text-emerald-400" />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-emerald-400 tracking-tight">
-                {kpis.activeCount.toLocaleString()}
-              </span>
-              <span className="text-xs font-semibold text-emerald-500/90">
-                ({kpis.activePct}%)
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1">
-              Uso frecuente reciente
-            </p>
-          </div>
-        </div>
+        <KpiCard
+          label="Activas"
+          icon={Activity}
+          tone="emerald"
+          value={kpis.activeCount.toLocaleString()}
+          pct={kpis.activePct}
+          footnote="Lecturas y escrituras recientes"
+        />
 
-        {/* KPI: Solo Lectura Reciente */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-amber-400 mb-2">
-            <span className="text-xs font-medium text-slate-400">Solo Lectura</span>
-            <div className="p-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-              <Archive className="w-4 h-4 text-amber-400" />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-amber-400 tracking-tight">
-                {kpis.readOnlyCount.toLocaleString()}
-              </span>
-              <span className="text-xs font-semibold text-amber-500/90">
-                ({kpis.readOnlyPct}%)
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1">
-              0 escrituras recientes
-            </p>
-          </div>
-        </div>
+        <KpiCard
+          label="Solo lectura"
+          icon={Archive}
+          tone="amber"
+          value={kpis.readOnlyCount.toLocaleString()}
+          pct={kpis.readOnlyPct}
+          footnote="0 escrituras registradas"
+        />
 
-        {/* KPI: Estancadas (> 30d sin uso) */}
-        <div className="bg-slate-900 border border-orange-500/20 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden">
-          <div className="flex items-center justify-between text-orange-400 mb-2">
-            <span className="text-xs font-medium text-slate-300">Estancadas &gt;30d</span>
-            <div className="p-1.5 bg-orange-500/10 border border-orange-500/20 rounded-lg">
-              <CalendarClock className="w-4 h-4 text-orange-400" />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-orange-400 tracking-tight">
-                {staleCount.toLocaleString()}
-              </span>
-              <span className="text-xs font-semibold text-orange-500/90">
-                ({stalePct}%)
-              </span>
-            </div>
-            <p className="text-[11px] text-orange-400/80 font-medium mt-1">
-              Lecturas viejas sin uso
-            </p>
-          </div>
-        </div>
+        <KpiCard
+          label="Estancadas >30d"
+          icon={CalendarClock}
+          tone="orange"
+          value={staleCount.toLocaleString()}
+          pct={stalePct}
+          footnote="Sin actividad reciente"
+        />
 
-        {/* KPI: 0 I/O Total */}
-        <div className="bg-slate-900 border border-rose-950/40 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden">
-          <div className="flex items-center justify-between text-rose-400 mb-2">
-            <span className="text-xs font-medium text-slate-300">0 I/O Total</span>
-            <div className="p-1.5 bg-rose-500/10 border border-rose-500/20 rounded-lg">
-              <Trash2 className="w-4 h-4 text-rose-400" />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-rose-400 tracking-tight">
-                {kpis.obsoleteCount.toLocaleString()}
+        <KpiCard
+          label="0 I/O total"
+          icon={Trash2}
+          tone="rose"
+          value={kpis.obsoleteCount.toLocaleString()}
+          pct={kpis.obsoletePct}
+          footnote="0 lecturas · 0 escrituras"
+          badge={
+            kpis.obsoleteCount > 0 && (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-300 ring-1 ring-inset ring-rose-500/30 bg-rose-500/10">
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-400 animate-pulse" />
+                Candidatas
               </span>
-              <span className="text-xs font-semibold text-rose-500/90">
-                ({kpis.obsoletePct}%)
-              </span>
-            </div>
-            <p className="text-[11px] text-rose-400/80 font-medium mt-1">
-              0 lecturas y escrituras
-            </p>
-          </div>
-        </div>
+            )
+          }
+        />
 
-        {/* NUEVO KPI: Espacio Recuperable */}
-        <div className="bg-gradient-to-br from-slate-900 to-indigo-950/40 border border-indigo-500/30 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden shadow-lg shadow-indigo-500/5">
-          <div className="flex items-center justify-between text-indigo-400 mb-2">
-            <span className="text-xs font-medium text-slate-200">Espacio Recuperable</span>
-            <div className="p-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-lg">
-              <HardDriveDownload className="w-4 h-4 text-indigo-400" />
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-indigo-300 tracking-tight">
-              {formatSpace(kpis.reclaimableSizeMb)}
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1">
-              En {kpis.obsoleteCount} tablas sin I/O
-            </p>
-          </div>
-        </div>
+        <KpiCard
+          label="Espacio recuperable"
+          icon={HardDriveDownload}
+          tone="indigo"
+          value={spaceValue}
+          unit={spaceUnit}
+          pct={reclaimablePct}
+          footnote={<>En <span className="tabular-nums">{kpis.obsoleteCount}</span> tablas sin I/O</>}
+          badge={
+            kpis.reclaimableSizeMb > 0 && (
+              <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-200 ring-1 ring-inset ring-indigo-400/30 bg-indigo-500/15">
+                del total
+              </span>
+            )
+          }
+        />
       </div>
-    </div>
+    </section>
   );
 }
